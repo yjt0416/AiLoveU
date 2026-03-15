@@ -1,0 +1,17 @@
+requests==2.31.0
+python-dotenv==1.0.1
+edge-tts==7.2.7
+playsound==1.2.2
+comtypes==1.4.16
+pypiwin32==223
+pywin32==311
+sounddevice==0.5.5
+soundfile==0.13.1
+numpy==2.4.2
+cffi==2.0.0
+pycparser==3.0
+keyboard==0.13.5
+
+# 可选：离线语音识别依赖（二选一即可）
+# vosk==0.3.45  # 轻量离线语音识别，约50M中文模型
+# openai-whisper==20250625  # OpenAI开源语音识别，准确率更高，需要约1G模型
