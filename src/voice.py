@@ -7,6 +7,9 @@ import soundfile as sf
 import numpy as np
 import keyboard
 from playsound import playsound
+import time
+import random
+from typing import Callable, List, Optional, Tuple
 
 class VoiceModule:
     def __init__(self):
@@ -17,8 +20,14 @@ class VoiceModule:
         # "zh-CN-YunyangNeural"  # 深沉的男声
         # "zh-CN-XiaoyiNeural"  # 可爱的小女孩声音
         # "zh-HK-HiuMaanNeural"  # 粤语女声
-        self.rate = "+30%"  # 语速，+10%稍微快一点更自然
+        # 语速太快会显得“播音腔/机器人”，这里调回更自然的范围
+        self.rate = "+10%"  # 建议区间：0% ~ +15%
         self.volume = "+0%"  # 音量
+        self.pitch = "+0Hz"  # 轻微变化会更像真人（见 _humanize_prosody）
+        self._humanize = True
+        self._humanize_rate_jitter = 6   # ±6%
+        self._humanize_pitch_jitter = 6  # ±6Hz
+        self.speaker_name = os.getenv("AI_NAME", "AiLoveU")
         
         # 录音参数
         self.sample_rate = 16000
@@ -39,7 +48,102 @@ class VoiceModule:
         print("语音模块加载成功，使用微软晓晓语音")
         if self.asr_model:
             print(f"✅ 离线语音识别已加载（{self.asr_model_type}）")
-        print("ℹ️  录音方式：按住空格键开始录音，松开空格键结束录音")
+        print("ℹ️  录音方式：按住Ctrl键开始录音，松开Ctrl键结束录音")
+
+    def _humanize_prosody(self) -> Tuple[str, str]:
+        """
+        给每次合成增加轻微“人味”波动（避免机械感）。
+        返回 (rate, pitch)
+        """
+        if not self._humanize:
+            return self.rate, self.pitch
+
+        r = random.randint(-self._humanize_rate_jitter, self._humanize_rate_jitter)
+        p = random.randint(-self._humanize_pitch_jitter, self._humanize_pitch_jitter)
+
+        rate = f"{r:+d}%"
+        pitch = f"{p:+d}Hz"
+        return rate, pitch
+
+    def _split_sentences(self, text: str) -> List[str]:
+        # 简单按常见中文/英文句末标点分段，提升停顿自然度
+        parts: List[str] = []
+        buf: List[str] = []
+        enders = set("。！？!?；;…")
+        for ch in text:
+            buf.append(ch)
+            if ch in enders:
+                s = "".join(buf).strip()
+                if s:
+                    parts.append(s)
+                buf = []
+        tail = "".join(buf).strip()
+        if tail:
+            parts.append(tail)
+        return parts or [text]
+
+    def _synthesize_mp3_with_word_marks(self, text: str) -> Tuple[str, List[Tuple[float, float]]]:
+        """
+        合成语音为 mp3 临时文件，并同时获取 WordBoundary 时间戳。
+
+        返回:
+        - mp3_path: 临时 mp3 文件路径（调用方负责删除）
+        - marks: [(start_s, end_s), ...] 以播放开始为 0 的秒级区间
+        """
+        # 分句合成：停顿更自然，同时仍可拿到 word boundary 做口型
+        segments = self._split_sentences(text)
+
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
+            temp_filename = temp_file.name
+
+        marks_100ns: List[Tuple[int, int]] = []
+        try:
+            async def _run():
+                offset_base = 0
+                for seg in segments:
+                    rate, pitch = self._humanize_prosody()
+                    communicate = edge_tts.Communicate(
+                        seg,
+                        self.voice,
+                        rate=rate,
+                        volume=self.volume,
+                        pitch=pitch,
+                        boundary="WordBoundary",
+                    )
+                    last_end = 0
+                    async for chunk in communicate.stream():
+                        if chunk["type"] == "audio":
+                            with open(temp_filename, "ab") as f:
+                                f.write(chunk["data"])
+                        elif chunk["type"] == "WordBoundary":
+                            start = int(chunk.get("offset", 0)) + offset_base
+                            dur = int(chunk.get("duration", 0))
+                            if dur <= 0:
+                                continue
+                            end = start + dur
+                            marks_100ns.append((start, end))
+                            last_end = max(last_end, end)
+
+                    # 给段落末尾留一点“自然停顿”，并把下一段 marks 的时间基准往后推
+                    # 这里用 250ms 作为经验值（不会太拖，也不会粘连）
+                    offset_base = max(offset_base, last_end) + 2_500_000
+
+            asyncio.run(_run())
+
+            # edge-tts 的 offset/duration 单位为 100ns（1s = 10,000,000）
+            marks_s: List[Tuple[float, float]] = [
+                (s / 10_000_000.0, e / 10_000_000.0) for (s, e) in marks_100ns
+            ]
+
+            # 去掉非常短的片段，避免口型抖动
+            marks_s = [(s, e) for (s, e) in marks_s if (e - s) >= 0.03]
+            return temp_filename, marks_s
+        except Exception:
+            try:
+                if os.path.exists(temp_filename):
+                    os.remove(temp_filename)
+            finally:
+                raise
     
     def _load_asr_model(self):
         """尝试加载离线语音识别模型"""
@@ -73,7 +177,14 @@ class VoiceModule:
     
     async def _speak_async(self, text: str):
         """异步合成语音并播放"""
-        communicate = edge_tts.Communicate(text, self.voice, rate=self.rate, volume=self.volume)
+        rate, pitch = self._humanize_prosody()
+        communicate = edge_tts.Communicate(
+            text,
+            self.voice,
+            rate=rate,
+            volume=self.volume,
+            pitch=pitch,
+        )
         
         # 创建临时文件
         with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as temp_file:
@@ -94,9 +205,42 @@ class VoiceModule:
                 os.remove(temp_filename)
     
     def speak(self, text: str):
-        print(f"天天：{text}")
+        print(f"{self.speaker_name}：{text}")
         # 运行异步任务
         asyncio.run(self._speak_async(text))
+
+    def speak_with_word_marks(
+        self,
+        text: str,
+        on_start: Optional[Callable[[List[Tuple[float, float]]], None]] = None,
+        on_end: Optional[Callable[[], None]] = None,
+    ):
+        """
+        带“口型同步用时间戳”的播放接口。
+
+        - on_start: 在真正开始播放时回调，参数为 word marks 秒级区间列表
+        - on_end: 播放结束回调
+        """
+        print(f"{self.speaker_name}：{text}")
+        mp3_path: Optional[str] = None
+        try:
+            mp3_path, marks = self._synthesize_mp3_with_word_marks(text)
+            if on_start:
+                on_start(marks)
+            playsound(mp3_path)
+            if on_end:
+                on_end()
+        finally:
+            if mp3_path and os.path.exists(mp3_path):
+                try:
+                    os.remove(mp3_path)
+                except Exception:
+                    pass
+
+    def set_speaker_name(self, name: str):
+        name = (name or "").strip()
+        if name:
+            self.speaker_name = name
     
     def _audio_callback(self, indata, frames, time, status):
         """音频回调函数，不断收集音频数据"""
@@ -106,13 +250,13 @@ class VoiceModule:
             self.audio_frames.append(indata.copy())
     
     def record_audio(self):
-        """按住空格键开始录音，松开空格键结束录音"""
+        """按住ctrl键开始录音，松开ctrl键结束录音"""
         try:
             self.audio_frames = []
             self.recording = False
             
-            print("\n🎤 准备就绪，请按住【空格键】开始说话")
-            print("   松开空格键结束录音")
+            print("\n🎤 准备就绪，请按住【Ctrl键】开始说话")
+            print("   松开Ctrl键结束录音")
             
             # 启动音频流
             stream = sd.InputStream(
@@ -123,17 +267,21 @@ class VoiceModule:
             )
             
             with stream:
-                # 等待空格键按下
-                keyboard.wait('space')
+                # 等待ctrl键按下
+                keyboard.wait('ctrl')
                 self.recording = True
-                print("\n🔴 正在录音...（松开空格键停止）", flush=True)
+                print("\n🔴 正在录音...（松开Ctrl键停止）", flush=True)
                 
-                # 等待空格键松开
-                keyboard.wait('space', release=True)
+                # 等待ctrl键松开 - 兼容旧版本keyboard
+                while True:
+                    if keyboard.is_pressed('ctrl'):
+                        continue
+                    break
+                
                 self.recording = False
                 print("\n✅ 录音结束", flush=True)
             
-            # 清除输入缓冲区，移除按下空格产生的空格字符
+            # 清除输入缓冲区，移除按下ctrl产生的字符
             import sys
             import msvcrt
             while msvcrt.kbhit():
@@ -209,20 +357,11 @@ class VoiceModule:
             return input("你：").strip()
     
     def listen(self) -> str:
-        """监听用户输入，支持语音和文字"""
-        print("\n🎙️ 语音模式：")
-        print("1. 直接输入文字，按回车键发送")
-        print("2. 按回车键不输入内容，进入语音录音")
-        print("   然后按住【空格键】开始说话，松开结束录音")
-        print("请选择：输入内容或直接按回车开始录音")
+        """语音模式下：用户按Ctrl键开始录音，松开结束，不混文字输入"""
+        print("\n🎙️ 语音模式已激活")
+        print("👉 按住【Ctrl键】开始说话，松开【Ctrl键】结束录音")
+        print("💡 提示：全程不需要按回车键，只需要操作Ctrl键")
         
-        user_input = input("你：")
-        
-        # 如果用户输入了文字，直接返回
-        if user_input.strip():
-            return user_input.strip()
-        
-        # 如果用户没有输入，尝试录音
         try:
             audio_data = self.record_audio()
             if audio_data is not None:
@@ -230,11 +369,11 @@ class VoiceModule:
                 if result:
                     return result
             
-            # 如果录音或识别失败，让用户输入文字
-            print("请输入你想说的话：")
+            # 如果录音或识别失败，回退到文字输入
+            print("\n⚠️  语音输入失败，请输入文字：")
             return input("你：").strip()
             
         except Exception as e:
-            print(f"❌ 语音输入出错：{e}")
+            print(f"\n❌ 语音输入出错：{e}")
             print("请输入文字：")
             return input("你：").strip()

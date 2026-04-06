@@ -1,139 +1,156 @@
-# 🤖 AI情感伴侣 - 离线语音对话系统
+# 🤖 AiLoveU - 离线语音对话助手
 
-一个完全离线的AI情感伴侣对话系统，支持语音输入输出，基于大语言模型和离线语音识别。
+AiLoveU 是一个偏重本地体验与可定制交互的语音对话项目，支持命令行、Tkinter、PyQt6（含 Live2D）三种使用方式。
 
-## ✨ 功能特性
+## ✨ 当前功能
 
-- 💬 **AI对话** - 基于DeepSeek大语言模型，支持多轮对话，带有情感陪伴人设
-- 🎤 **离线语音识别** - 使用Vosk离线语音识别，不需要网络，保护隐私
-- 🔊 **自然语音合成** - 使用微软Edge-TTS，晓晓女声非常自然生动
-- 🎹 **智能录音** - 按住空格键开始录音，松开空格键结束，自由控制时长
-- 📱 **两种输入模式** - 支持语音模式和文字模式自由切换
-- 🔒 **完全离线** - 所有语音识别都在本地完成，不需要上传任何数据
-- 🚫 **无依赖问题** - 使用sounddevice替代PyAudio，完美支持Python 3.14+
+- 💬 **多轮对话**：基于 DeepSeek API，包含系统人设与上下文记忆
+- 🎤 **语音输入**：离线 ASR（优先 Vosk，兼容 Whisper）
+- 🔊 **语音输出**：edge-tts，自然语音合成
+- 🙂 **情绪识别**：OpenCV + 情绪模型，支持根据情绪触发提示回复
+- 🖥️ **三种入口**：
+  - `main.py`（命令行）
+  - `gui.py`（Tkinter）
+  - `gui_beautiful.py`（PyQt6 + Live2D）
+- 🧩 **PyQt6 增强特性**：
+  - Live2D 模型递归扫描与一键切换
+  - 模型缩放（滑块）与位置拖动（`Shift + 左键`）
+  - 语音角色切换
+  - AI 昵称可修改（运行时生效）
+  - `Ctrl + Enter` 快捷发送
+  - 语音播放时口型同步（简易）
 
 ## 🛠️ 技术栈
 
-- **大语言模型API**：DeepSeek API
-- **语音合成**：edge-tts (微软晓晓)
-- **语音识别**：Vosk (离线)
-- **音频录制**：sounddevice (不需要PyAudio)
+- **LLM**：DeepSeek API
+- **TTS**：edge-tts
+- **ASR**：Vosk / Whisper
+- **音频录制**：sounddevice
 - **键盘事件**：keyboard
+- **GUI**：Tkinter / PyQt6
+- **Live2D**：`live2d.v2`
+- **CV**：OpenCV
 
 ## 📋 环境要求
 
-- Python 3.8+ (已测试Python 3.14可用)
-- Windows/Linux/MacOS
+- Python 3.8+
+- Windows（当前交互设计优先适配 Windows）
 
 ## 🚀 快速开始
 
-### 1. 克隆项目
+### 1) 克隆项目
+
 ```bash
-git clone https://github.com/你的用户名/AI-Partner.git
-cd AI-Partner
+git clone https://github.com/yjt0416/AiLoveU.git
+cd AiLoveU
 ```
 
-### 2. 安装依赖
+### 2) 安装依赖
+
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. 下载Vosk中文离线语音识别模型
-```bash
-# 下载地址：https://alphacephei.com/vosk/models
-# 下载 vosk-model-small-cn-0.22.zip
-# 解压后放到项目根目录，命名为 vosk-model-small-cn-0.22
-```
+### 3) 准备 `.env`
 
-### 4. 配置API密钥
-创建 `.env` 文件：
+复制 `.env.example` 为 `.env`，并填写：
+
 ```env
-API_KEY=你的DeepSeek API密钥
+API_KEY=your_deepseek_api_key_here
 API_URL=https://api.deepseek.com/v1/chat/completions
 DEEPSEEK_MODEL=deepseek-chat
 TEMPERATURE=0.8
+AI_NAME=AiLoveU
 ```
 
-### 5. 运行程序
+> 说明：`AI_NAME` 为默认昵称。PyQt 美化版里也可以在界面运行时直接修改。
+
+### 4) 下载离线语音识别模型（可选但推荐）
+
 ```bash
+# 下载：https://alphacephei.com/vosk/models
+# 例如：vosk-model-small-cn-0.22
+# 解压到项目根目录
+```
+
+### 5) 运行
+
+```bash
+# 命令行版
 python main.py
+
+# Tkinter 版
+python gui.py
+
+# PyQt6 + Live2D 美化版
+python gui_beautiful.py
 ```
 
-## 🎮 使用说明
+## 🐰 Live2D 使用说明（PyQt6）
 
-### 基本操作
-- **文字模式**：默认模式，直接输入文字聊天
-- **切换语音模式**：输入 `语音`，按回车
-- **语音输入**：按住空格键开始说话，松开空格键结束录音
-- **切换文字模式**：输入 `文字`，按回车
-- **退出程序**：输入 `退出`，按回车
+1. 将模型放入 `live2d_models/` 下（支持多层目录）
+2. 模型入口文件支持：
+   - `index.json`
+   - `*.model.json`
+   - `*.model3.json`
+   - `model.json`
+3. 启动后可在左侧下拉框切换模型
+4. 可用“大小”滑块调节模型尺寸（每个模型单独记忆）
+5. 可按住 `Shift + 左键` 拖动模型显示位置
 
-### 交互流程
-```
-你：语音
-天天：已切换到语音模式
-👉 按住空格键开始说话...
-(你按住空格说话 → 松开空格)
-✅ 录音结束
-🔍 正在识别...
-你：[识别结果]
-天天：(语音回复)
-(自动等待下一次录音)
-```
+## ⌨️ 交互说明
+
+### 命令行版 / Tkinter
+
+- 语音模式录音触发：按住 `Ctrl`（依据 `voice.py` 当前实现）
+- 可输入：`语音` / `文字` / `表情` / `退出`
+
+### PyQt6 美化版
+
+- 发送快捷键：`Ctrl + Enter`
+- 语音模式录音触发：按住 `Ctrl`，松开结束
+- 支持在界面中：
+  - 修改 AI 昵称
+  - 切换 TTS 声音
+  - 切换 Live2D 模型与调节显示
 
 ## 📁 项目结构
 
-```
-AI-Partner/
-├── main.py                 # 主程序入口
+```text
+AiLoveU/
+├── main.py
+├── gui.py
+├── gui_beautiful.py
 ├── config/
-│   └── settings.py         # 配置管理
+│   └── settings.py
 ├── src/
-│   ├── __init__.py
-│   ├── chat_bot.py         # 聊天机器人核心
-│   ├── voice.py            # 语音模块（TTS + ASR）
-│   └── api_client.py       # API客户端
-├── requirements.txt        # 依赖列表
-├── .gitignore             # Git忽略文件
-├── .env.example           # 环境变量示例
-└── README.md             # 项目说明
+│   ├── chat_bot.py
+│   ├── voice.py
+│   ├── api_client.py
+│   └── face_emotion.py
+├── live2d_models/          # 本地模型目录（已在 .gitignore）
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md
 ```
 
-## 🎯 项目亮点
+## 📦 大文件与 Git 说明
 
-1. **完整的语音交互闭环**：从语音输入到语音输出，完整的对话体验
-2. **离线隐私保护**：语音识别完全在本地完成，不依赖网络
-3. **良好的工程实践**：模块化设计，代码结构清晰，易于扩展
-4. **解决实际问题**：处理了Python版本兼容性、文件占用冲突、终端输入冲突等问题
-5. **用户体验优化**：按住录音松开停止，符合用户习惯，交互自然
+以下内容默认不上传：
 
-## 🔧 可选配置
+- `live2d_models/`
+- `live2d-master.zip`
+- `vosk-model-*/`
 
-### 更换语音
-在 `src/voice.py` 中修改 `self.voice`：
-```python
-self.voice = "zh-CN-XiaoxiaoNeural"  # 默认：晓晓女声
-# self.voice = "zh-CN-YunxiNeural"    # 云希男声
-# self.voice = "zh-CN-XiaoyiNeural"    # 晓伊女声
-```
+如需共享模型，建议单独提供下载链接而非直接入库。
 
-### 使用Whisper替代Vosk
-如果想要更高的识别准确率，可以使用OpenAI Whisper：
-```bash
-pip install openai-whisper
-```
-程序会自动检测并加载Whisper模型。
-
-## 📄 许可证
+## 📄 License
 
 MIT License
 
 ## 🙏 致谢
 
-- [edge-tts](https://github.com/rany2/edge-tts) - 提供免费的微软语音合成
-- [Vosk](https://github.com/alphacep/vosk) - 开源离线语音识别
-- [sounddevice](https://github.com/spatialaudio/python-sounddevice) - 跨平台音频录制
-
----
-
-*💖 如果你觉得这个项目对你有帮助，欢迎点个 Star！*
+- [edge-tts](https://github.com/rany2/edge-tts)
+- [Vosk](https://github.com/alphacep/vosk)
+- [sounddevice](https://github.com/spatialaudio/python-sounddevice)

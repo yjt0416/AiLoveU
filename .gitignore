@@ -1,5 +1,66 @@
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment
 .env
-.conda/
+.env.*
+*.env
+.venv
+venv/
+ENV/
+
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Audio files
+*.wav
+*.mp3
+*.mp4
+*.garbage
+temp_*
+
+# Vosk model (too large, download manually)
+vosk-model-*/
+
+# Emotion model
+emotion_model.npy
+*.npy
+
+# Live2D models (too large, download manually)
+live2d_models/
+live2d-master.zip
+live2d-master/
+
+# Cache
+whisper/
+*.cache/
