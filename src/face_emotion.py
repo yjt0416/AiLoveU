@@ -3,6 +3,21 @@ import numpy as np
 from PIL import Image
 import requests
 import os
+import sys
+
+
+def safe_print(*args, **kwargs):
+    sep = kwargs.pop("sep", " ")
+    end = kwargs.pop("end", "\n")
+    flush = kwargs.pop("flush", False)
+    text = sep.join(str(arg) for arg in args)
+    stream = kwargs.pop("file", sys.stdout)
+    try:
+        print(text, end=end, file=stream, flush=flush, **kwargs)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "utf-8"
+        fallback = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(fallback, end=end, file=stream, flush=flush, **kwargs)
 
 class FaceEmotionRecognizer:
     """人脸识别和情绪识别模块"""
@@ -20,37 +35,37 @@ class FaceEmotionRecognizer:
         self.model_path = "emotion_model.npy"
         self._download_model_if_needed()
         
-        print("✅ 人脸情绪识别模块初始化完成")
+        safe_print("人脸情绪识别模块初始化完成")
     
     def _download_model_if_needed(self):
         """下载预训练的情绪识别模型"""
         if not os.path.exists(self.model_path):
-            print("📥 正在下载情绪识别模型...")
+            safe_print("正在下载情绪识别模型...")
             # 使用开源预训练模型
             url = "https://github.com/peteranger/EmotionRecognition/raw/master/emotion_model.npy"
             try:
                 response = requests.get(url, timeout=30)
                 with open(self.model_path, 'wb') as f:
                     f.write(response.content)
-                print("✅ 模型下载完成")
+                safe_print("模型下载完成")
             except Exception as e:
-                print(f"⚠️  模型下载失败：{e}")
-                print("情绪识别功能将不可用，但人脸识别仍可工作")
+                safe_print(f"模型下载失败：{e}")
+                safe_print("情绪识别功能将不可用，但人脸识别仍可工作")
     
     def capture_face(self):
         """打开摄像头实时检测，按空格键拍照，q键退出"""
         # 打开摄像头
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            print("❌ 无法打开摄像头")
+            safe_print("无法打开摄像头")
             return False, None, "无法访问摄像头"
         
-        print("📸 摄像头已打开")
-        print("👉 操作说明：")
-        print("   - 面对摄像头，检测到人脸会显示绿色框")
-        print("   - 按【空格键】拍照识别情绪")
-        print("   - 按【q键】退出返回聊天")
-        print()
+        safe_print("摄像头已打开")
+        safe_print("操作说明：")
+        safe_print("   - 面对摄像头，检测到人脸会显示绿色框")
+        safe_print("   - 按【空格键】拍照识别情绪")
+        safe_print("   - 按【q键】退出返回聊天")
+        safe_print()
         
         while True:
             ret, frame = cap.read()
@@ -88,12 +103,12 @@ class FaceEmotionRecognizer:
                     cv2.destroyAllWindows()
                     
                     if emotion:
-                        print(f"🧑 检测到人脸，情绪：{emotion}")
+                        safe_print(f"检测到人脸，情绪：{emotion}")
                         return True, emotion, f"检测到用户人脸，当前情绪：{emotion}"
                     else:
                         return False, None, "情绪识别失败"
                 else:
-                    print("⚠️  未检测到人脸，请调整位置重试")
+                    safe_print("未检测到人脸，请调整位置重试")
             
             # q键退出
             elif key == ord('q'):
@@ -123,7 +138,7 @@ class FaceEmotionRecognizer:
             else:
                 return None
         except Exception as e:
-            print(f"❌ 情绪预测失败：{e}")
+            safe_print(f"情绪预测失败：{e}")
             return None
     
     def get_user_info(self):

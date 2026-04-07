@@ -9,7 +9,22 @@ import keyboard
 from playsound import playsound
 import time
 import random
+import sys
 from typing import Callable, List, Optional, Tuple
+
+
+def safe_print(*args, **kwargs):
+    sep = kwargs.pop("sep", " ")
+    end = kwargs.pop("end", "\n")
+    flush = kwargs.pop("flush", False)
+    text = sep.join(str(arg) for arg in args)
+    stream = kwargs.pop("file", sys.stdout)
+    try:
+        print(text, end=end, file=stream, flush=flush, **kwargs)
+    except UnicodeEncodeError:
+        encoding = getattr(stream, "encoding", None) or "utf-8"
+        fallback = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+        print(fallback, end=end, file=stream, flush=flush, **kwargs)
 
 class VoiceModule:
     def __init__(self):
@@ -45,10 +60,10 @@ class VoiceModule:
         # 尝试加载离线语音识别模型
         self._load_asr_model()
         
-        print("语音模块加载成功，使用微软晓晓语音")
+        safe_print("语音模块加载成功，使用微软晓晓语音")
         if self.asr_model:
-            print(f"✅ 离线语音识别已加载（{self.asr_model_type}）")
-        print("ℹ️  录音方式：按住Ctrl键开始录音，松开Ctrl键结束录音")
+            safe_print(f"离线语音识别已加载（{self.asr_model_type}）")
+        safe_print("录音方式：按住Ctrl键开始录音，松开Ctrl键结束录音")
 
     def _humanize_prosody(self) -> Tuple[str, str]:
         """
@@ -161,7 +176,7 @@ class VoiceModule:
         except ImportError:
             pass
         except Exception as e:
-            print(f"加载vosk模型失败：{e}")
+            safe_print(f"加载vosk模型失败：{e}")
         
         # 尝试加载whisper
         try:
@@ -173,7 +188,7 @@ class VoiceModule:
         except ImportError:
             pass
         except Exception as e:
-            print(f"加载whisper模型失败：{e}")
+            safe_print(f"加载whisper模型失败：{e}")
     
     async def _speak_async(self, text: str):
         """异步合成语音并播放"""
@@ -205,7 +220,7 @@ class VoiceModule:
                 os.remove(temp_filename)
     
     def speak(self, text: str):
-        print(f"{self.speaker_name}：{text}")
+        safe_print(f"{self.speaker_name}：{text}")
         # 运行异步任务
         asyncio.run(self._speak_async(text))
 
@@ -221,7 +236,7 @@ class VoiceModule:
         - on_start: 在真正开始播放时回调，参数为 word marks 秒级区间列表
         - on_end: 播放结束回调
         """
-        print(f"{self.speaker_name}：{text}")
+        safe_print(f"{self.speaker_name}：{text}")
         mp3_path: Optional[str] = None
         try:
             mp3_path, marks = self._synthesize_mp3_with_word_marks(text)
@@ -245,7 +260,7 @@ class VoiceModule:
     def _audio_callback(self, indata, frames, time, status):
         """音频回调函数，不断收集音频数据"""
         if status:
-            print(status)
+            safe_print(status)
         if self.recording:
             self.audio_frames.append(indata.copy())
     
@@ -255,8 +270,8 @@ class VoiceModule:
             self.audio_frames = []
             self.recording = False
             
-            print("\n🎤 准备就绪，请按住【Ctrl键】开始说话")
-            print("   松开Ctrl键结束录音")
+            safe_print("\n准备就绪，请按住【Ctrl键】开始说话")
+            safe_print("   松开Ctrl键结束录音")
             
             # 启动音频流
             stream = sd.InputStream(
@@ -270,7 +285,7 @@ class VoiceModule:
                 # 等待ctrl键按下
                 keyboard.wait('ctrl')
                 self.recording = True
-                print("\n🔴 正在录音...（松开Ctrl键停止）", flush=True)
+                safe_print("\n正在录音...（松开Ctrl键停止）", flush=True)
                 
                 # 等待ctrl键松开 - 兼容旧版本keyboard
                 while True:
@@ -279,7 +294,7 @@ class VoiceModule:
                     break
                 
                 self.recording = False
-                print("\n✅ 录音结束", flush=True)
+                safe_print("\n录音结束", flush=True)
             
             # 清除输入缓冲区，移除按下ctrl产生的字符
             import sys
@@ -295,7 +310,7 @@ class VoiceModule:
                 return None
             
         except Exception as e:
-            print(f"❌ 录音失败：{e}")
+            safe_print(f"录音失败：{e}")
             # 尝试清除输入缓冲区
             import sys
             import msvcrt
@@ -314,7 +329,7 @@ class VoiceModule:
         text = ""
         
         try:
-            print("🔍 正在识别语音...")
+            safe_print("正在识别语音...")
             
             # 如果有离线模型，使用离线识别
             if self.asr_model and self.asr_model_type == "vosk":
@@ -342,25 +357,25 @@ class VoiceModule:
             
             # 如果识别到文本
             if text:
-                print(f"你：{text}")
+                safe_print(f"你：{text}")
                 return text
             
             # 如果没有离线模型或者识别失败，让用户手动输入
-            print("ℹ️  离线语音识别未启用或识别失败")
-            print("请直接输入你说的内容：")
+            safe_print("离线语音识别未启用或识别失败")
+            safe_print("请直接输入你说的内容：")
             text = input("你：").strip()
             return text
             
         except Exception as e:
-            print(f"❌ 识别失败：{e}")
-            print("请直接输入你说的内容：")
+            safe_print(f"识别失败：{e}")
+            safe_print("请直接输入你说的内容：")
             return input("你：").strip()
     
     def listen(self) -> str:
         """语音模式下：用户按Ctrl键开始录音，松开结束，不混文字输入"""
-        print("\n🎙️ 语音模式已激活")
-        print("👉 按住【Ctrl键】开始说话，松开【Ctrl键】结束录音")
-        print("💡 提示：全程不需要按回车键，只需要操作Ctrl键")
+        safe_print("\n语音模式已激活")
+        safe_print("按住【Ctrl键】开始说话，松开【Ctrl键】结束录音")
+        safe_print("提示：全程不需要按回车键，只需要操作Ctrl键")
         
         try:
             audio_data = self.record_audio()
@@ -370,10 +385,10 @@ class VoiceModule:
                     return result
             
             # 如果录音或识别失败，回退到文字输入
-            print("\n⚠️  语音输入失败，请输入文字：")
+            safe_print("\n语音输入失败，请输入文字：")
             return input("你：").strip()
             
         except Exception as e:
-            print(f"\n❌ 语音输入出错：{e}")
-            print("请输入文字：")
+            safe_print(f"\n语音输入出错：{e}")
+            safe_print("请输入文字：")
             return input("你：").strip()

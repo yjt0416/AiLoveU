@@ -12,16 +12,16 @@ class DeepseekAPIClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
-    def chat(self, messages: list) -> str:
+    def chat(self, messages: list, temperature: float | None = None, model: str | None = None) -> str:
         data = {
-            "model": self.model,
+            "model": model or self.model,
             "messages": messages,
-            "temperature": self.temperature
+            "temperature": self.temperature if temperature is None else temperature
         }
 
         try:
             response = requests.post(
-                self.api_url,headers=self.headers,json=data
+                self.api_url,headers=self.headers,json=data, timeout=60
             )
             response.raise_for_status()
             result = response.json()

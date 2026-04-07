@@ -1,2 +1,2 @@
-from .settings import Config
+from .runtime_config import Config
 

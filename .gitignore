@@ -5,7 +5,6 @@ __pycache__/
 *.so
 .Python
 build/
-develop-eggs/
 dist/
 downloads/
 eggs/
@@ -20,17 +19,20 @@ wheels/
 .installed.cfg
 *.egg
 
-# Environment
+# Environment / local config
 .env
 .env.*
 *.env
-.venv
+.venv/
 venv/
 ENV/
+.python-version
 
-# IDE
+# IDE / local tooling
 .vscode/
 .idea/
+.cursor/
+.conda/
 *.swp
 *.swo
 *~
@@ -42,25 +44,39 @@ ENV/
 Thumbs.db
 Desktop.ini
 
-# Audio files
+# Logs / temp
+*.log
+*.tmp
+*.temp
+*.bak
+
+# Audio / generated media
 *.wav
 *.mp3
 *.mp4
 *.garbage
 temp_*
 
-# Vosk model (too large, download manually)
+# Model weights and large local assets
 vosk-model-*/
-
-# Emotion model
-emotion_model.npy
-*.npy
-
-# Live2D models (too large, download manually)
-live2d_models/
-live2d-master.zip
-live2d-master/
-
-# Cache
 whisper/
 *.cache/
+*.npy
+emotion_model.npy
+live2d_models/
+live2d-master/
+live2d-master.zip
+*.whl
+
+# Runtime data and private local state
+data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Python cache / notebooks
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/

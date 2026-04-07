@@ -1,59 +1,111 @@
-# 🤖 AiLoveU - 离线语音对话助手
+# AiLoveU
 
-AiLoveU 是一个偏重本地体验与可定制交互的语音对话项目，支持命令行、Tkinter、PyQt6（含 Live2D）三种使用方式。
+AiLoveU is a desktop AI companion project for showcasing multimodal LLM application development.  
+It combines LLM dialogue, local voice interaction, emotion recognition, Live2D avatars, character-card import, and a lightweight local RAG memory layer.
 
-## ✨ 当前功能
+## Highlights
 
-- 💬 **多轮对话**：基于 DeepSeek API，包含系统人设与上下文记忆
-- 🎤 **语音输入**：离线 ASR（优先 Vosk，兼容 Whisper）
-- 🔊 **语音输出**：edge-tts，自然语音合成
-- 🙂 **情绪识别**：OpenCV + 情绪模型，支持根据情绪触发提示回复
-- 🖥️ **三种入口**：
-  - `main.py`（命令行）
-  - `gui.py`（Tkinter）
-  - `gui_beautiful.py`（PyQt6 + Live2D）
-- 🧩 **PyQt6 增强特性**：
-  - Live2D 模型递归扫描与一键切换
-  - 模型缩放（滑块）与位置拖动（`Shift + 左键`）
-  - 语音角色切换
-  - AI 昵称可修改（运行时生效）
-  - `Ctrl + Enter` 快捷发送
-  - 语音播放时口型同步（简易）
+- Multimodal interaction: text chat, voice input/output, emotion-aware replies, Live2D avatar rendering
+- Character Tavern PNG card import: extract persona metadata from PNG and load it as a new companion
+- Multi-character companion switching: each character keeps isolated chat history, session context, and long-term memory
+- Local RAG memory: short-term session memory, long-term user preference storage, structured memory extraction, retrieval-augmented prompting
+- Multiple frontends: CLI, Tkinter GUI, and PyQt6 GUI
+- Resume-friendly architecture: API orchestration, memory engine, voice pipeline, character registry, and GUI layers are modularized
 
-## 🛠️ 技术栈
+## Core Features
 
-- **LLM**：DeepSeek API
-- **TTS**：edge-tts
-- **ASR**：Vosk / Whisper
-- **音频录制**：sounddevice
-- **键盘事件**：keyboard
-- **GUI**：Tkinter / PyQt6
-- **Live2D**：`live2d.v2`
-- **CV**：OpenCV
+### 1. Dialogue and Personalization
 
-## 📋 环境要求
+- DeepSeek-based conversation
+- Automatic reply-language adaptation based on the user's latest input
+- Adaptive response-length control for short, normal, and detailed replies
+- Structured memory extraction with JSON schema validation
+- Retrieval-augmented memory injection before each reply
 
-- Python 3.8+
-- Windows（当前交互设计优先适配 Windows）
+### 2. Character Card Import
 
-## 🚀 快速开始
+- Supports Character Tavern style PNG cards
+- Reads the `chara` metadata block from PNG text chunks
+- Decodes base64 JSON and extracts fields such as:
+  - `name`
+  - `description`
+  - `personality`
+  - `scenario`
+  - `first_mes`
+  - `system_prompt`
+  - `tags`
+- Converts imported cards into isolated local companion profiles
 
-### 1) 克隆项目
+### 3. Multi-Character Isolation
+
+- Switch between multiple AI companions in the GUI
+- Each character has its own:
+  - system prompt
+  - opening message
+  - transcript history
+  - current session window
+  - long-term memory namespace
+- "Clear chat" starts a new session for the current character instead of deleting all stored history
+
+### 4. Multimodal Desktop Experience
+
+- Offline ASR with Vosk
+- TTS with `edge-tts`
+- Emotion recognition with OpenCV + local emotion model
+- Live2D model rendering and interaction in the PyQt6 GUI
+
+## Project Structure
+
+```text
+AiLoveU/
+├── config/
+│   ├── __init__.py
+│   └── runtime_config.py
+├── docs/
+│   ├── CHARACTER_CARD_IMPORT.md
+│   └── RAG_MEMORY.md
+├── src/
+│   ├── api_client.py
+│   ├── character_card.py
+│   ├── character_registry.py
+│   ├── chat_bot.py
+│   ├── chat_bot_rag.py
+│   ├── face_emotion.py
+│   ├── llm_memory_extractor.py
+│   ├── memory_engine.py
+│   ├── memory_schema.py
+│   └── voice.py
+├── gui.py
+├── gui_beautiful.py
+├── main.py
+├── requirements.txt
+└── README.md
+```
+
+## Environment
+
+- Python 3.10+
+- Windows recommended
+- Conda environment optional but recommended
+
+## Quick Start
+
+### 1. Clone
 
 ```bash
-git clone https://github.com/yjt0416/AiLoveU.git
+git clone <your-repository-url>
 cd AiLoveU
 ```
 
-### 2) 安装依赖
+### 2. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3) 准备 `.env`
+### 3. Configure Environment Variables
 
-复制 `.env.example` 为 `.env`，并填写：
+Copy `.env.example` to `.env` and fill in your own values:
 
 ```env
 API_KEY=your_deepseek_api_key_here
@@ -61,96 +113,71 @@ API_URL=https://api.deepseek.com/v1/chat/completions
 DEEPSEEK_MODEL=deepseek-chat
 TEMPERATURE=0.8
 AI_NAME=AiLoveU
+MEMORY_DB_PATH=data/aipartner_memory.db
+CHARACTER_REGISTRY_PATH=data/characters.json
+SHORT_TERM_MEMORY_TURNS=8
+RAG_MEMORY_TOP_K=4
+MEMORY_EXTRACTION_MODEL=deepseek-chat
+MEMORY_EXTRACTION_TEMPERATURE=0.1
 ```
 
-> 说明：`AI_NAME` 为默认昵称。PyQt 美化版里也可以在界面运行时直接修改。
+### 4. Prepare Local Models Manually
 
-### 4) 下载离线语音识别模型（可选但推荐）
+This repository does **not** include large local assets.
+
+You need to prepare them yourself if you want the full multimodal experience:
+
+- Vosk model directory, for example `vosk-model-small-cn-0.22/`
+- Emotion model file such as `emotion_model.npy`
+- Live2D model assets under `live2d_models/`
+
+### 5. Run
 
 ```bash
-# 下载：https://alphacephei.com/vosk/models
-# 例如：vosk-model-small-cn-0.22
-# 解压到项目根目录
-```
-
-### 5) 运行
-
-```bash
-# 命令行版
+# CLI
 python main.py
 
-# Tkinter 版
+# Tkinter GUI
 python gui.py
 
-# PyQt6 + Live2D 美化版
+# PyQt6 GUI
 python gui_beautiful.py
 ```
 
-## 🐰 Live2D 使用说明（PyQt6）
+## Resume Positioning
 
-1. 将模型放入 `live2d_models/` 下（支持多层目录）
-2. 模型入口文件支持：
-   - `index.json`
-   - `*.model.json`
-   - `*.model3.json`
-   - `model.json`
-3. 启动后可在左侧下拉框切换模型
-4. 可用“大小”滑块调节模型尺寸（每个模型单独记忆）
-5. 可按住 `Shift + 左键` 拖动模型显示位置
+This project is suitable for describing as:
 
-## ⌨️ 交互说明
+- Desktop multimodal AI companion application
+- LLM application with RAG memory and user preference management
+- Character-driven conversational AI with persona import and isolated memory namespaces
+- Engineering-focused AI application integrating API, local models, GUI, and persistence
 
-### 命令行版 / Tkinter
+Example resume bullets:
 
-- 语音模式录音触发：按住 `Ctrl`（依据 `voice.py` 当前实现）
-- 可输入：`语音` / `文字` / `表情` / `退出`
+- Built a desktop multimodal AI companion integrating LLM dialogue, offline ASR, TTS, emotion recognition, and Live2D avatar rendering.
+- Designed a local RAG memory layer with short-term context, long-term preference storage, structured memory extraction, and retrieval-augmented prompting.
+- Implemented Character Tavern PNG card import and multi-character switching with isolated transcript and memory namespaces.
+- Modularized the system into API, memory, voice, emotion, character, and GUI layers to improve maintainability and extensibility.
 
-### PyQt6 美化版
+## Privacy and Repository Hygiene
 
-- 发送快捷键：`Ctrl + Enter`
-- 语音模式录音触发：按住 `Ctrl`，松开结束
-- 支持在界面中：
-  - 修改 AI 昵称
-  - 切换 TTS 声音
-  - 切换 Live2D 模型与调节显示
+This public repository should **not** contain:
 
-## 📁 项目结构
+- real API keys
+- local `.env` files
+- chat logs or personal conversation history
+- local memory databases / JSON stores
+- locally downloaded ASR / TTS / Live2D model assets
+- temporary audio recordings
 
-```text
-AiLoveU/
-├── main.py
-├── gui.py
-├── gui_beautiful.py
-├── config/
-│   └── settings.py
-├── src/
-│   ├── chat_bot.py
-│   ├── voice.py
-│   ├── api_client.py
-│   └── face_emotion.py
-├── live2d_models/          # 本地模型目录（已在 .gitignore）
-├── requirements.txt
-├── .env.example
-├── .gitignore
-└── README.md
-```
+These are ignored via `.gitignore` and should stay local only.
 
-## 📦 大文件与 Git 说明
+## Notes
 
-以下内容默认不上传：
+- Imported character cards may contain English persona text. The application now adapts reply language based on the user's latest message.
+- The first greeting stored in the original character card may still remain in the original card language unless you regenerate or localize it.
 
-- `live2d_models/`
-- `live2d-master.zip`
-- `vosk-model-*/`
+## License
 
-如需共享模型，建议单独提供下载链接而非直接入库。
-
-## 📄 License
-
-MIT License
-
-## 🙏 致谢
-
-- [edge-tts](https://github.com/rany2/edge-tts)
-- [Vosk](https://github.com/alphacep/vosk)
-- [sounddevice](https://github.com/spatialaudio/python-sounddevice)
+MIT

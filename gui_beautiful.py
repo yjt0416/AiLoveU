@@ -1,3 +1,4 @@
+import html
 import sys
 import os
 import threading
@@ -7,7 +8,7 @@ import math
 import OpenGL.GL as gl
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTextEdit, QPushButton, QLabel, QSplitter, QFrame
+    QTextEdit, QPushButton, QLabel, QSplitter, QFrame, QFileDialog, QMessageBox
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QMouseEvent, QCursor
@@ -337,7 +338,7 @@ class AiLoveUGUI(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AiLoveU - AI语音对话助手")
+        self.setWindowTitle("AiLoveU - 多角色 AI 伴侣")
         self.setMinimumSize(1000, 700)
         self.resize(1200, 800)
         
@@ -347,6 +348,7 @@ class AiLoveUGUI(QMainWindow):
 
         # AI 昵称（可在界面里修改）
         self.ai_name = getattr(self.bot, "ai_name", "AiLoveU")
+        self.current_character_id = self.bot.get_current_character().character_id
         try:
             self.voice.set_speaker_name(self.ai_name)
         except Exception:
@@ -365,6 +367,9 @@ class AiLoveUGUI(QMainWindow):
         
         self.init_ui()
         self.init_live2d()
+        self._refresh_character_selector(select_id=self.current_character_id)
+        self._reload_active_character_view()
+        self._refresh_memory_panel()
 
         self.speech_start.connect(self._on_speech_start)
         self.speech_end.connect(self._on_speech_end)
@@ -420,6 +425,47 @@ class AiLoveUGUI(QMainWindow):
 
         # Live2D 模型选择（从 live2d_models/ 扫描）
         from PyQt6.QtWidgets import QComboBox, QSlider, QLineEdit
+        character_row = QHBoxLayout()
+        character_row.setSpacing(8)
+        self.character_selector = QComboBox()
+        self.character_selector.setMinimumHeight(36)
+        self.character_selector.setStyleSheet("""
+            QComboBox {
+                background: #ffffff;
+                color: #1f2d3d;
+                border: 1px solid rgba(31,45,61,0.12);
+                border-radius: 10px;
+                padding: 6px 10px;
+            }
+            QComboBox::drop-down { border: none; width: 26px; }
+            QComboBox::down-arrow { width: 0px; height: 0px; }
+        """)
+        self.character_selector.currentIndexChanged.connect(self._on_character_selected)
+        character_row.addWidget(self.character_selector, 1)
+
+        self.import_card_button = QPushButton("导入角色卡")
+        self.import_card_button.setMinimumHeight(36)
+        self.import_card_button.setStyleSheet("""
+            QPushButton {
+                background: #1f8f6b;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #187255; }
+        """)
+        self.import_card_button.clicked.connect(self.import_character_card)
+        character_row.addWidget(self.import_card_button)
+        left_layout.addLayout(character_row)
+
+        self.character_meta_label = QLabel("当前伴侣：AiLoveU")
+        self.character_meta_label.setWordWrap(True)
+        self.character_meta_label.setStyleSheet("color: rgba(31,45,61,0.70); font-size: 12px; padding: 2px 2px 6px 2px;")
+        left_layout.addWidget(self.character_meta_label)
+
         self.model_selector = QComboBox()
         self.model_selector.setMinimumHeight(36)
         self.model_selector.setStyleSheet("""
@@ -705,8 +751,54 @@ class AiLoveUGUI(QMainWindow):
         chat_label = QLabel("💬 聊天记录")
         chat_label.setFont(QFont("Microsoft YaHei", 12, QFont.Weight.Bold))
         chat_label.setStyleSheet("color: #2c3e50; margin-bottom: 5px;")
-        right_layout.addWidget(chat_label)
-        
+        header_row = QHBoxLayout()
+        header_row.addWidget(chat_label)
+        self.memory_mode_chip = QLabel("记忆模式 --")
+        self.memory_mode_chip.setStyleSheet("""
+            QLabel {
+                background: #edf6ff;
+                color: #1d5f8c;
+                border: 1px solid #c8ddf0;
+                border-radius: 999px;
+                padding: 5px 10px;
+                font-size: 11px;
+                font-weight: 600;
+            }
+        """)
+        header_row.addStretch(1)
+        header_row.addWidget(self.memory_mode_chip)
+        right_layout.addLayout(header_row)
+
+        self.chat_hint_label = QLabel("已启用长期记忆、用户画像抽取和多角色会话隔离。")
+        self.chat_hint_label.setWordWrap(True)
+        self.chat_hint_label.setStyleSheet("color: rgba(31,45,61,0.70); font-size: 12px; margin-bottom: 4px;")
+        right_layout.addWidget(self.chat_hint_label)
+
+        stats_row = QHBoxLayout()
+        stats_row.setSpacing(10)
+        profile_card, self.profile_stat_value = self._create_stat_card("Profile", "0")
+        memory_card, self.memory_stat_value = self._create_stat_card("Memories", "0")
+        session_card, self.session_stat_value = self._create_stat_card("Session turns", "0")
+        stats_row.addWidget(profile_card)
+        stats_row.addWidget(memory_card)
+        stats_row.addWidget(session_card)
+        right_layout.addLayout(stats_row)
+
+        self.memory_preview_label = QLabel("当前还没有结构化记忆。")
+        self.memory_preview_label.setWordWrap(True)
+        self.memory_preview_label.setStyleSheet("""
+            QLabel {
+                background: #f8fafc;
+                color: #5b6776;
+                border: 1px solid rgba(31,45,61,0.08);
+                border-radius: 12px;
+                padding: 10px 12px;
+                font-size: 12px;
+                margin-bottom: 6px;
+            }
+        """)
+        right_layout.addWidget(self.memory_preview_label)
+
         self.chat_history = QTextEdit()
         self.chat_history.setReadOnly(True)
         self.chat_history.setFont(QFont("Microsoft YaHei", 11))
@@ -761,6 +853,10 @@ class AiLoveUGUI(QMainWindow):
         input_layout.addWidget(send_button)
         
         right_layout.addLayout(input_layout)
+        self.input_hint = QLabel("提示：Ctrl+Enter 发送。稳定的偏好、目标和设定会自动写入记忆。")
+        self.input_hint.setWordWrap(True)
+        self.input_hint.setStyleSheet("color: rgba(31,45,61,0.60); font-size: 11px; padding: 2px 4px 0 4px;")
+        right_layout.addWidget(self.input_hint)
         main_layout.addWidget(right_panel, 2)
         
         self.message_received.connect(self.on_message_received)
@@ -1011,25 +1107,164 @@ class AiLoveUGUI(QMainWindow):
             self.output_queue.put(("response", response))
         except Exception as e:
             self.output_queue.put(("error", str(e)))
-    
-    def add_message(self, sender, message, is_user=False):
+
+    def _create_stat_card(self, title: str, value: str):
+        card = QFrame()
+        card.setStyleSheet("""
+            QFrame {
+                background: #f8fbff;
+                border: 1px solid rgba(31,45,61,0.08);
+                border-radius: 14px;
+            }
+        """)
+        layout = QVBoxLayout(card)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(2)
+
+        title_label = QLabel(title)
+        title_label.setStyleSheet("color: rgba(31,45,61,0.60); font-size: 11px;")
+        value_label = QLabel(value)
+        value_label.setStyleSheet("color: #1f2d3d; font-size: 18px; font-weight: 700;")
+
+        layout.addWidget(title_label)
+        layout.addWidget(value_label)
+        return card, value_label
+
+    def _refresh_memory_panel(self):
+        summary = {}
+        try:
+            summary = self.bot.get_memory_summary()
+        except Exception:
+            summary = {}
+
+        if not summary:
+            return
+
+        storage_mode = str(summary.get("storage_mode", "memory")).upper()
+        self.memory_mode_chip.setText(f"记忆模式 {storage_mode}")
+        self.profile_stat_value.setText(str(summary.get("profile_count", 0)))
+        self.memory_stat_value.setText(str(summary.get("memory_count", 0)))
+        self.session_stat_value.setText(str(summary.get("session_turn_count", 0)))
+
+        profile_preview = summary.get("profile_preview") or []
+        recent_preview = summary.get("recent_memory_preview") or []
+        lines = profile_preview + recent_preview
+        if not lines:
+            self.memory_preview_label.setText("当前还没有结构化记忆。可以告诉伴侣你的偏好、目标或交流风格。")
+        else:
+            self.memory_preview_label.setText(" | ".join(lines[:4]))
+
+    def _refresh_character_selector(self, select_id: str | None = None):
+        if not hasattr(self, "character_selector"):
+            return
+        characters = self.bot.list_characters()
+        self.character_selector.blockSignals(True)
+        self.character_selector.clear()
+        selected_index = 0
+        for index, character in enumerate(characters):
+            label = character.name
+            if character.built_in:
+                label += " (默认)"
+            self.character_selector.addItem(label, userData=character.character_id)
+            if character.character_id == (select_id or self.current_character_id):
+                selected_index = index
+        self.character_selector.setCurrentIndex(selected_index)
+        self.character_selector.blockSignals(False)
+
+    def _reload_active_character_view(self):
+        profile = self.bot.get_current_character()
+        self.current_character_id = profile.character_id
+        self.ai_name = profile.name
+        self.setWindowTitle(f"AiLoveU - {profile.name}")
+        try:
+            self.voice.set_speaker_name(self.ai_name)
+        except Exception:
+            pass
+        if hasattr(self, "name_input"):
+            self.name_input.setText(self.ai_name)
+        if hasattr(self, "character_meta_label"):
+            tag_text = " / ".join(profile.tags[:3]) if profile.tags else "本地角色"
+            source_text = "默认角色" if profile.built_in else "角色卡导入"
+            self.character_meta_label.setText(
+                f"当前伴侣：{profile.name}\n来源：{source_text}\n标签：{tag_text}"
+            )
+        if hasattr(self, "chat_hint_label"):
+            self.chat_hint_label.setText(
+                f"当前角色：{profile.name}。每个角色的聊天记录、会话上下文和长期记忆都相互隔离。"
+            )
+
+        self.chat_history.clear()
+        transcript = self.bot.get_transcript(limit=200)
+        for item in transcript:
+            role = item.get("role")
+            if role == "user":
+                self.add_message("你", item.get("content", ""), True, speak_voice=False)
+            elif role == "assistant":
+                self.add_message(profile.name, item.get("content", ""), False, speak_voice=False)
+
+    def _on_character_selected(self, _index: int = -1):
+        character_id = self.character_selector.currentData()
+        if not character_id or character_id == self.current_character_id:
+            return
+        try:
+            self.bot.switch_character(character_id)
+            self._reload_active_character_view()
+            self._refresh_memory_panel()
+        except Exception as e:
+            QMessageBox.warning(self, "切换失败", f"切换角色失败：{e}")
+
+    def import_character_card(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择角色卡 PNG",
+            "",
+            "PNG Files (*.png)",
+        )
+        if not file_path:
+            return
+        try:
+            profile = self.bot.import_character_card(file_path)
+            self.current_character_id = profile.character_id
+            self._refresh_character_selector(select_id=profile.character_id)
+            self._reload_active_character_view()
+            self._refresh_memory_panel()
+            QMessageBox.information(
+                self,
+                "导入成功",
+                f"已导入角色：{profile.name}\n之后该角色会与其他角色使用隔离的聊天记录和记忆。",
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "导入失败", f"角色卡解析失败：{e}")
+
+    def _append_chat_html(self, block: str):
         cursor = self.chat_history.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
-        
-        if is_user:
-            color = "#2c3e50"
-            prefix = f"<b style='color: {color};'>你:</b><br>"
-        else:
-            color = "#2980b9"
-            prefix = f"<b style='color: {color};'>{self.ai_name}:</b><br>"
-        
-        html = prefix + message.replace('\n', '<br>') + "<br><br>"
-        cursor.insertHtml(html)
+        cursor.insertHtml(block)
         self.chat_history.setTextCursor(cursor)
         self.chat_history.ensureCursorVisible()
-        
-        if not is_user and self.use_voice:
+    
+    def add_message(self, sender, message, is_user=False, speak_voice=True):
+        speaker = "你" if is_user else html.escape(sender or self.ai_name)
+        safe_message = html.escape(message).replace("\n", "<br>")
+        align = "right" if is_user else "left"
+        bubble_color = "#dbeafe" if is_user else "#f8fafc"
+        border_color = "#93c5fd" if is_user else "#d7e0ea"
+        meta_color = "#456b8c" if is_user else "#5f6f82"
+
+        block = f"""
+        <div style="margin: 12px 0; text-align: {align};">
+            <div style="display: inline-block; max-width: 78%; text-align: left;">
+                <div style="font-size: 11px; color: {meta_color}; margin-bottom: 4px;">{speaker}</div>
+                <div style="background: {bubble_color}; border: 1px solid {border_color}; border-radius: 18px; padding: 12px 14px; color: #1f2d3d; line-height: 1.6;">
+                    {safe_message}
+                </div>
+            </div>
+        </div>
+        """
+        self._append_chat_html(block)
+        if speak_voice and (not is_user) and self.use_voice:
             self._speak_with_lipsync(message)
+        return
 
     def _apply_ai_name(self):
         name = ""
@@ -1042,6 +1277,12 @@ class AiLoveUGUI(QMainWindow):
         self.ai_name = name
         try:
             self.bot.set_ai_name(name)
+        except Exception:
+            pass
+        try:
+            self.current_character_id = self.bot.get_current_character().character_id
+            self._refresh_character_selector(select_id=self.current_character_id)
+            self._reload_active_character_view()
         except Exception:
             pass
         try:
@@ -1107,20 +1348,33 @@ class AiLoveUGUI(QMainWindow):
         self.live2d_widget.set_mouth_open(mouth)
     
     def add_system_message(self, message):
-        cursor = self.chat_history.textCursor()
-        cursor.movePosition(cursor.MoveOperation.End)
-        html = f"<p style='color: #7f8c8d; font-size: 12px;'>💡 {message}</p><br>"
-        cursor.insertHtml(html)
-        self.chat_history.setTextCursor(cursor)
-        self.chat_history.ensureCursorVisible()
+        safe_message = html.escape(message).replace("\n", "<br>")
+        block = f"""
+        <div style="margin: 8px 0; text-align: center;">
+            <span style="display: inline-block; background: #eef3f8; color: #5f6f82; border: 1px solid #d8e2ec; border-radius: 999px; padding: 7px 12px; font-size: 12px; line-height: 1.5;">
+                {safe_message}
+            </span>
+        </div>
+        """
+        self._append_chat_html(block)
+        return
     
     def clear_chat(self):
         self.chat_history.clear()
-        self.add_system_message("聊天记录已清空")
+        try:
+            self.bot.reset_session()
+            profile = self.bot.get_current_character()
+            if profile.first_message:
+                self.add_message(profile.name, profile.first_message, False, speak_voice=False)
+        except Exception:
+            pass
+        self._refresh_memory_panel()
+        self.add_system_message("已为当前角色开启新的会话，本角色的历史记录仍会保留并与其他角色隔离。")
     
     def on_message_received(self, msg_type, content):
         if msg_type == "response":
             self.add_message(self.ai_name, content, False)
+            self._refresh_memory_panel()
         elif msg_type == "system_prompt":
             self.add_system_message(f"😊 检测到情绪，AI正在回复...")
         elif msg_type == "system_message":
