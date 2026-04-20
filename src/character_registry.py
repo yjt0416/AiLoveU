@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from config import Config
-from src.character_card import CharacterCardParser
+from src.character_card import CharacterCard, CharacterCardParser
+from src.custom_character_schema import validate_and_normalize_character_payload
 
 
 @dataclass
@@ -71,10 +72,13 @@ class CharacterRegistry:
         profile.name = cleaned_name
         if profile.built_in:
             profile.system_prompt = Config.personality_prompt.format(ai_name=profile.name)
-            profile.first_message = f"你好，我是 {profile.name}。今天想聊点什么？"
+            profile.first_message = f"你好，我是{profile.name}。今天想聊点什么？"
         else:
             profile.system_prompt = profile.system_prompt.replace(previous_name, profile.name)
             profile.first_message = profile.first_message.replace(previous_name, profile.name)
+            profile.description = profile.description.replace(previous_name, profile.name)
+            profile.personality = profile.personality.replace(previous_name, profile.name)
+            profile.scenario = profile.scenario.replace(previous_name, profile.name)
         profile.updated_at = time.time()
         self._data["characters"][character_id] = profile.to_dict()
         self._save()
@@ -82,6 +86,35 @@ class CharacterRegistry:
 
     def import_character_card(self, file_path: str) -> CharacterProfile:
         card = CharacterCardParser.parse_png(file_path)
+        return self._store_character_card(card)
+
+    def create_custom_character(self, payload: Dict[str, Any]) -> CharacterProfile:
+        normalized = validate_and_normalize_character_payload(payload)
+        source_path = f"custom://{time.time_ns()}"
+        raw_payload = {
+            "spec": "custom-character",
+            "spec_version": "1.0",
+            "data": {
+                "name": normalized["name"],
+                "description": normalized["description"],
+                "personality": normalized["personality"],
+                "scenario": normalized["scenario"],
+                "first_mes": normalized["first_message"],
+                "mes_example": normalized["message_example"],
+                "system_prompt": normalized["system_prompt"],
+                "post_history_instructions": normalized["post_history_instructions"],
+                "creator_notes": normalized["creator_notes"],
+                "tags": normalized["tags"],
+            },
+        }
+        card = CharacterCardParser.from_payload(
+            raw_payload,
+            source_path=source_path,
+            avatar_path="",
+        )
+        return self._store_character_card(card)
+
+    def _store_character_card(self, card: CharacterCard) -> CharacterProfile:
         base_id = card.card_id
         character_id = base_id
         idx = 2
@@ -102,7 +135,7 @@ class CharacterRegistry:
             description=card.description,
             personality=card.personality,
             scenario=card.scenario,
-            raw_card=card.to_dict(),
+            raw_card=card.raw_payload,
             updated_at=time.time(),
             built_in=False,
         )
@@ -125,34 +158,22 @@ class CharacterRegistry:
     def _ensure_default_character(self) -> None:
         characters = self._data.setdefault("characters", {})
         default_name = getattr(Config, "AI_NAME", "AiLoveU")
-        if "default" not in characters:
-            default_profile = CharacterProfile(
-                character_id="default",
-                name=default_name,
-                system_prompt=Config.personality_prompt.format(ai_name=default_name),
-                first_message=f"你好，我是 {default_name}。今天想聊点什么？",
-                avatar_path="",
-                source_path="",
-                tags=["default"],
-                description="Built-in AI companion",
-                personality="温柔、体贴、善于倾听。",
-                scenario="默认陪伴式对话。",
-                raw_card={},
-                updated_at=time.time(),
-                built_in=True,
-            )
-            characters["default"] = default_profile.to_dict()
-        else:
-            default_profile = CharacterProfile(**characters["default"])
-            default_profile.name = default_name
-            default_profile.system_prompt = Config.personality_prompt.format(ai_name=default_name)
-            default_profile.first_message = f"你好，我是 {default_name}。今天想聊点什么？"
-            default_profile.tags = ["default"]
-            default_profile.description = "Built-in AI companion"
-            default_profile.personality = "温柔、体贴、善于倾听。"
-            default_profile.scenario = "默认陪伴式对话。"
-            default_profile.built_in = True
-            characters["default"] = default_profile.to_dict()
+        default_profile = CharacterProfile(
+            character_id="default",
+            name=default_name,
+            system_prompt=Config.personality_prompt.format(ai_name=default_name),
+            first_message=f"你好，我是{default_name}。今天想聊点什么？",
+            avatar_path="",
+            source_path="",
+            tags=["default"],
+            description="Built-in AI companion.",
+            personality="Warm, supportive, and good at listening.",
+            scenario="A default AI companion for everyday conversation.",
+            raw_card={},
+            updated_at=time.time(),
+            built_in=True,
+        )
+        characters["default"] = default_profile.to_dict()
 
         if not self._data.get("active_character_id"):
             self._data["active_character_id"] = "default"

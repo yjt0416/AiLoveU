@@ -8,7 +8,8 @@ import math
 import OpenGL.GL as gl
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QTextEdit, QPushButton, QLabel, QSplitter, QFrame, QFileDialog, QMessageBox
+    QTextEdit, QPushButton, QLabel, QSplitter, QFrame, QFileDialog, QMessageBox,
+    QDialog, QDialogButtonBox, QFormLayout, QLineEdit
 )
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QSize
 from PyQt6.QtGui import QFont, QPalette, QColor, QMouseEvent, QCursor
@@ -331,6 +332,76 @@ class Live2dOpenGLWidget(QOpenGLWidget):
         # 这里改为“在 widget 内部即视为有效区域”，避免读回 framebuffer。
         return 0 <= click_x <= self.width() and 0 <= click_y <= self.height()
 
+class CustomCharacterDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("创建自定义角色")
+        self.setMinimumWidth(560)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
+
+        intro = QLabel(
+            "输入你对角色的设定，程序会把自然语言整理成结构化 JSON Schema，"
+            "并保存成一个可切换、可独立记忆的角色。"
+        )
+        intro.setWordWrap(True)
+        intro.setStyleSheet("color: #51606f; font-size: 12px;")
+        layout.addWidget(intro)
+
+        form = QFormLayout()
+        form.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+        form.setFormAlignment(Qt.AlignmentFlag.AlignTop)
+        form.setSpacing(10)
+
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("可选，例如：苏禾 / Hazel / 学姐")
+        form.addRow("角色名", self.name_input)
+
+        self.tags_input = QLineEdit()
+        self.tags_input.setPlaceholderText("可选，多个标签用逗号分隔，例如：温柔,室友,傲娇")
+        form.addRow("标签", self.tags_input)
+
+        self.notes_input = QTextEdit()
+        self.notes_input.setMinimumHeight(240)
+        self.notes_input.setPlaceholderText(
+            "例如：她叫苏禾，是和我合租的室友，表面有点嘴硬，其实很照顾人。"
+            "说话偏日常、轻吐槽，关系比较熟。希望她能记得我的求职目标，"
+            "平时多鼓励我。第一句话可以是“回来啦，今天过得怎么样？”"
+        )
+        form.addRow("角色设定", self.notes_input)
+        layout.addLayout(form)
+
+        hint = QLabel(
+            "建议描述这些信息：身份关系、性格、说话风格、场景设定、希望她怎么称呼你、"
+            "第一句话想要什么感觉。"
+        )
+        hint.setWordWrap(True)
+        hint.setStyleSheet("color: #6b7785; font-size: 11px;")
+        layout.addWidget(hint)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._handle_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _handle_accept(self):
+        if not self.notes_input.toPlainText().strip():
+            QMessageBox.warning(self, "信息不完整", "请至少输入一段角色设定。")
+            return
+        self.accept()
+
+    def get_payload(self):
+        return {
+            "name_hint": self.name_input.text().strip(),
+            "tags_hint": self.tags_input.text().strip(),
+            "notes": self.notes_input.toPlainText().strip(),
+        }
+
+
 class AiLoveUGUI(QMainWindow):
     message_received = pyqtSignal(str, str)
     speech_start = pyqtSignal(object)  # marks: List[Tuple[float,float]]
@@ -459,6 +530,23 @@ class AiLoveUGUI(QMainWindow):
         """)
         self.import_card_button.clicked.connect(self.import_character_card)
         character_row.addWidget(self.import_card_button)
+
+        self.custom_character_button = QPushButton("自定义角色")
+        self.custom_character_button.setMinimumHeight(36)
+        self.custom_character_button.setStyleSheet("""
+            QPushButton {
+                background: #2d6cdf;
+                color: white;
+                border: none;
+                border-radius: 10px;
+                padding: 6px 12px;
+                font-size: 12px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background: #1f56b5; }
+        """)
+        self.custom_character_button.clicked.connect(self.create_custom_character)
+        character_row.addWidget(self.custom_character_button)
         left_layout.addLayout(character_row)
 
         self.character_meta_label = QLabel("当前伴侣：AiLoveU")
@@ -1202,6 +1290,42 @@ class AiLoveUGUI(QMainWindow):
             elif role == "assistant":
                 self.add_message(profile.name, item.get("content", ""), False, speak_voice=False)
 
+    def _reload_active_character_view(self):
+        profile = self.bot.get_current_character()
+        self.current_character_id = profile.character_id
+        self.ai_name = profile.name
+        self.setWindowTitle(f"AiLoveU - {profile.name}")
+        try:
+            self.voice.set_speaker_name(self.ai_name)
+        except Exception:
+            pass
+        if hasattr(self, "name_input"):
+            self.name_input.setText(self.ai_name)
+        if hasattr(self, "character_meta_label"):
+            tag_text = " / ".join(profile.tags[:3]) if profile.tags else "本地角色"
+            if profile.built_in:
+                source_text = "默认角色"
+            elif str(profile.source_path).startswith("custom://"):
+                source_text = "自定义角色"
+            else:
+                source_text = "角色卡导入"
+            self.character_meta_label.setText(
+                f"当前伴侣：{profile.name}\n来源：{source_text}\n标签：{tag_text}"
+            )
+        if hasattr(self, "chat_hint_label"):
+            self.chat_hint_label.setText(
+                f"当前角色：{profile.name}。每个角色的聊天记录、会话上下文和长期记忆都相互隔离。"
+            )
+
+        self.chat_history.clear()
+        transcript = self.bot.get_transcript(limit=200)
+        for item in transcript:
+            role = item.get("role")
+            if role == "user":
+                self.add_message("你", item.get("content", ""), True, speak_voice=False)
+            elif role == "assistant":
+                self.add_message(profile.name, item.get("content", ""), False, speak_voice=False)
+
     def _on_character_selected(self, _index: int = -1):
         character_id = self.character_selector.currentData()
         if not character_id or character_id == self.current_character_id:
@@ -1236,6 +1360,33 @@ class AiLoveUGUI(QMainWindow):
         except Exception as e:
             QMessageBox.warning(self, "导入失败", f"角色卡解析失败：{e}")
 
+    def create_custom_character(self):
+        dialog = CustomCharacterDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        payload = dialog.get_payload()
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            profile = self.bot.create_custom_character(
+                user_notes=payload["notes"],
+                name_hint=payload["name_hint"],
+                tags_hint=payload["tags_hint"],
+            )
+            self.current_character_id = profile.character_id
+            self._refresh_character_selector(select_id=profile.character_id)
+            self._reload_active_character_view()
+            self._refresh_memory_panel()
+            QMessageBox.information(
+                self,
+                "创建成功",
+                f"已创建角色：{profile.name}\n程序已将你的描述转成结构化角色 JSON，并保存为独立角色。",
+            )
+        except Exception as e:
+            QMessageBox.warning(self, "创建失败", f"自定义角色生成失败：{e}")
+        finally:
+            QApplication.restoreOverrideCursor()
+
     def _append_chat_html(self, block: str):
         cursor = self.chat_history.textCursor()
         cursor.movePosition(cursor.MoveOperation.End)
@@ -1256,6 +1407,30 @@ class AiLoveUGUI(QMainWindow):
             <div style="display: inline-block; max-width: 78%; text-align: left;">
                 <div style="font-size: 11px; color: {meta_color}; margin-bottom: 4px;">{speaker}</div>
                 <div style="background: {bubble_color}; border: 1px solid {border_color}; border-radius: 18px; padding: 12px 14px; color: #1f2d3d; line-height: 1.6;">
+                    {safe_message}
+                </div>
+            </div>
+        </div>
+        """
+        self._append_chat_html(block)
+        if speak_voice and (not is_user) and self.use_voice:
+            self._speak_with_lipsync(message)
+        return
+
+    def add_message(self, sender, message, is_user=False, speak_voice=True):
+        speaker = "你" if is_user else html.escape(sender or self.ai_name)
+        safe_message = html.escape(message).replace("\n", "<br>")
+        align = "right" if is_user else "left"
+        inner_align = "right" if is_user else "left"
+        bubble_color = "#dbeafe" if is_user else "#f8fafc"
+        border_color = "#93c5fd" if is_user else "#d7e0ea"
+        meta_color = "#456b8c" if is_user else "#5f6f82"
+
+        block = f"""
+        <div style="margin: 12px 0; text-align: {align};">
+            <div style="display: inline-block; max-width: 78%; text-align: {inner_align};">
+                <div style="font-size: 11px; color: {meta_color}; margin: 0 2px 4px 2px;">{speaker}</div>
+                <div style="display: inline-block; text-align: left; background: {bubble_color}; border: 1px solid {border_color}; border-radius: 18px; padding: 12px 14px; color: #1f2d3d; line-height: 1.6;">
                     {safe_message}
                 </div>
             </div>

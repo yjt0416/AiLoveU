@@ -1,85 +1,140 @@
 # AiLoveU
 
-AiLoveU is a desktop AI companion project for showcasing multimodal LLM application development.  
-It combines LLM dialogue, local voice interaction, emotion recognition, Live2D avatars, character-card import, and a lightweight local RAG memory layer.
+> A desktop multimodal AI companion project focused on LLM application engineering, persona-based interaction, and local RAG memory.
 
-## Highlights
+AiLoveU is a resume-oriented LLM application project that combines:
 
-- Multimodal interaction: text chat, voice input/output, emotion-aware replies, Live2D avatar rendering
-- Character Tavern PNG card import: extract persona metadata from PNG and load it as a new companion
-- Multi-character companion switching: each character keeps isolated chat history, session context, and long-term memory
-- Local RAG memory: short-term session memory, long-term user preference storage, structured memory extraction, retrieval-augmented prompting
-- Multiple frontends: CLI, Tkinter GUI, and PyQt6 GUI
-- Resume-friendly architecture: API orchestration, memory engine, voice pipeline, character registry, and GUI layers are modularized
+- role-based AI companion interaction
+- local short-term and long-term memory management
+- Character Tavern PNG card import
+- custom character generation from natural-language descriptions
+- voice input/output, emotion recognition, and Live2D avatar rendering
 
-## Core Features
+It is designed to showcase not just model calling, but the application layer around large models: prompt orchestration, structured extraction, memory storage, retrieval augmentation, and GUI productization.
 
-### 1. Dialogue and Personalization
+## Showcase
 
-- DeepSeek-based conversation
-- Automatic reply-language adaptation based on the user's latest input
-- Adaptive response-length control for short, normal, and detailed replies
-- Structured memory extraction with JSON schema validation
-- Retrieval-augmented memory injection before each reply
+### PyQt6 desktop interface
 
-### 2. Character Card Import
+![AiLoveU GUI showcase](docs/images/github-showcase.png)
 
-- Supports Character Tavern style PNG cards
-- Reads the `chara` metadata block from PNG text chunks
-- Decodes base64 JSON and extracts fields such as:
-  - `name`
-  - `description`
-  - `personality`
-  - `scenario`
-  - `first_mes`
-  - `system_prompt`
-  - `tags`
-- Converts imported cards into isolated local companion profiles
+The current interface supports:
 
-### 3. Multi-Character Isolation
+- multi-character switching
+- isolated transcript and memory namespaces per character
+- custom character creation
+- local memory preview
+- text / voice interaction entry points
 
-- Switch between multiple AI companions in the GUI
-- Each character has its own:
-  - system prompt
-  - opening message
-  - transcript history
-  - current session window
-  - long-term memory namespace
-- "Clear chat" starts a new session for the current character instead of deleting all stored history
+## Project Highlights
+
+- **Multimodal AI application**: integrates LLM dialogue, ASR, TTS, emotion recognition, and Live2D avatar interaction
+- **Persona system**: supports built-in characters, Character Tavern PNG card import, and custom role generation
+- **Memory-enhanced dialogue**: combines short-term session context with long-term user profile and preference memory
+- **Structured extraction pipeline**: uses LLM-based extraction plus JSON Schema validation to turn user utterances into durable memory
+- **Multi-character isolation**: each role has independent prompts, transcript history, active session, and long-term memory namespace
+- **Desktop engineering focus**: modularized into API, memory, character, voice, emotion, and GUI layers
+
+## Core Capabilities
+
+### 1. Dialogue Orchestration
+
+- DeepSeek-based conversation pipeline
+- automatic reply-language adaptation based on the user's latest input
+- adaptive response-length control for concise / balanced / detailed replies
+- persona injection through system prompts
+- retrieval-augmented prompting before each reply
+
+### 2. Local RAG Memory
+
+- short-term memory from recent session turns
+- long-term memory stored as structured user profile + memory items
+- LLM-based memory extraction from each user utterance
+- JSON Schema validation and normalization before persistence
+- lightweight retrieval based on relevance, importance, and recency
+
+### 3. Character System
+
+- import Character Tavern style PNG cards by reading the `chara` metadata block
+- parse fields like `name`, `description`, `personality`, `scenario`, `first_mes`, `system_prompt`, and `tags`
+- create custom characters from free-form user descriptions
+- switch between companions in the GUI
+- keep role data isolated through character-level namespaces
 
 ### 4. Multimodal Desktop Experience
 
-- Offline ASR with Vosk
+- offline ASR with Vosk
 - TTS with `edge-tts`
-- Emotion recognition with OpenCV + local emotion model
-- Live2D model rendering and interaction in the PyQt6 GUI
+- emotion recognition with OpenCV + local emotion model
+- Live2D avatar rendering and interaction in the PyQt6 GUI
+
+## Architecture Overview
+
+The project is organized into several clear layers:
+
+- **GUI layer**
+  - `gui.py`
+  - `gui_beautiful.py`
+- **Dialogue orchestration**
+  - `src/chat_bot_rag.py`
+- **Model access**
+  - `src/api_client.py`
+- **Memory layer**
+  - `src/memory_engine.py`
+  - `src/llm_memory_extractor.py`
+  - `src/memory_schema.py`
+- **Character layer**
+  - `src/character_card.py`
+  - `src/character_registry.py`
+  - `src/custom_character_builder.py`
+  - `src/custom_character_schema.py`
+- **Multimodal modules**
+  - `src/voice.py`
+  - `src/face_emotion.py`
+
+### Request flow
+
+```text
+User input
+-> GUI
+-> ChatBot orchestrator
+-> character prompt + language control + response-length control
+-> memory retrieval (RAG)
+-> LLM API
+-> response display
+-> structured memory extraction
+-> local persistence
+```
 
 ## Project Structure
 
 ```text
 AiLoveU/
-├── config/
-│   ├── __init__.py
-│   └── runtime_config.py
-├── docs/
-│   ├── CHARACTER_CARD_IMPORT.md
-│   └── RAG_MEMORY.md
-├── src/
-│   ├── api_client.py
-│   ├── character_card.py
-│   ├── character_registry.py
-│   ├── chat_bot.py
-│   ├── chat_bot_rag.py
-│   ├── face_emotion.py
-│   ├── llm_memory_extractor.py
-│   ├── memory_engine.py
-│   ├── memory_schema.py
-│   └── voice.py
-├── gui.py
-├── gui_beautiful.py
-├── main.py
-├── requirements.txt
-└── README.md
+├─ config/
+│  ├─ __init__.py
+│  └─ runtime_config.py
+├─ docs/
+│  ├─ images/
+│  ├─ CHARACTER_CARD_IMPORT.md
+│  └─ RAG_MEMORY.md
+├─ src/
+│  ├─ api_client.py
+│  ├─ character_card.py
+│  ├─ character_registry.py
+│  ├─ chat_bot.py
+│  ├─ chat_bot_rag.py
+│  ├─ custom_character_builder.py
+│  ├─ custom_character_schema.py
+│  ├─ face_emotion.py
+│  ├─ llm_memory_extractor.py
+│  ├─ memory_engine.py
+│  ├─ memory_schema.py
+│  └─ voice.py
+├─ gui.py
+├─ gui_beautiful.py
+├─ main.py
+├─ requirements.txt
+└─ README.md
 ```
 
 ## Environment
@@ -97,13 +152,13 @@ git clone <your-repository-url>
 cd AiLoveU
 ```
 
-### 2. Install Dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Configure Environment Variables
+### 3. Configure environment variables
 
 Copy `.env.example` to `.env` and fill in your own values:
 
@@ -119,16 +174,16 @@ SHORT_TERM_MEMORY_TURNS=8
 RAG_MEMORY_TOP_K=4
 MEMORY_EXTRACTION_MODEL=deepseek-chat
 MEMORY_EXTRACTION_TEMPERATURE=0.1
+CUSTOM_CHARACTER_MODEL=deepseek-chat
+CUSTOM_CHARACTER_TEMPERATURE=0.2
 ```
 
-### 4. Prepare Local Models Manually
+### 4. Prepare local assets manually
 
-This repository does **not** include large local assets.
-
-You need to prepare them yourself if you want the full multimodal experience:
+This repository does **not** include large local assets. Prepare them locally if you want the full multimodal experience:
 
 - Vosk model directory, for example `vosk-model-small-cn-0.22/`
-- Emotion model file such as `emotion_model.npy`
+- emotion model file such as `emotion_model.npy`
 - Live2D model assets under `live2d_models/`
 
 ### 5. Run
@@ -144,21 +199,22 @@ python gui.py
 python gui_beautiful.py
 ```
 
-## Resume Positioning
+## Why This Project Is Resume-Friendly
 
-This project is suitable for describing as:
+This project demonstrates several capabilities expected in **LLM application development** roles:
+
+- prompt orchestration instead of plain single-call chatting
+- structured information extraction from natural language
+- local RAG memory design for personalization
+- persona-based dialogue and multi-character isolation
+- desktop product integration across GUI, local models, and cloud API
+
+### Suggested resume positioning
 
 - Desktop multimodal AI companion application
-- LLM application with RAG memory and user preference management
-- Character-driven conversational AI with persona import and isolated memory namespaces
-- Engineering-focused AI application integrating API, local models, GUI, and persistence
-
-Example resume bullets:
-
-- Built a desktop multimodal AI companion integrating LLM dialogue, offline ASR, TTS, emotion recognition, and Live2D avatar rendering.
-- Designed a local RAG memory layer with short-term context, long-term preference storage, structured memory extraction, and retrieval-augmented prompting.
-- Implemented Character Tavern PNG card import and multi-character switching with isolated transcript and memory namespaces.
-- Modularized the system into API, memory, voice, emotion, character, and GUI layers to improve maintainability and extensibility.
+- LLM application with local RAG memory and user preference management
+- Persona-driven conversational AI with role import and isolated memory namespaces
+- Engineering-focused AI application integrating API orchestration, persistence, retrieval, GUI, and local multimodal modules
 
 ## Privacy and Repository Hygiene
 
@@ -166,17 +222,17 @@ This public repository should **not** contain:
 
 - real API keys
 - local `.env` files
-- chat logs or personal conversation history
-- local memory databases / JSON stores
-- locally downloaded ASR / TTS / Live2D model assets
+- personal chat logs or private memory databases
+- downloaded ASR / TTS / Live2D model assets
 - temporary audio recordings
 
-These are ignored via `.gitignore` and should stay local only.
+These are ignored through `.gitignore` and should stay local only.
 
 ## Notes
 
-- Imported character cards may contain English persona text. The application now adapts reply language based on the user's latest message.
-- The first greeting stored in the original character card may still remain in the original card language unless you regenerate or localize it.
+- Imported character cards may contain English persona text, but the application adapts reply language based on the user's latest input.
+- The current memory system is a lightweight local RAG pipeline focused on user personalization rather than document QA.
+- The current retrieval strategy is lexical and score-based; it can be further upgraded to embeddings and reranking in future iterations.
 
 ## License
 

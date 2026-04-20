@@ -4,6 +4,7 @@ from typing import Dict, List
 from config import Config
 from src.api_client import DeepseekAPIClient
 from src.character_registry import CharacterProfile, CharacterRegistry
+from src.custom_character_builder import CustomCharacterBuilder
 from src.llm_memory_extractor import LLMMemoryExtractor
 from src.memory_engine import MemoryManager
 
@@ -25,6 +26,11 @@ class ChatBot:
             api_client=self.api_client,
             model=Config.MEMORY_EXTRACTION_MODEL,
             temperature=Config.MEMORY_EXTRACTION_TEMPERATURE,
+        )
+        self.custom_character_builder = CustomCharacterBuilder(
+            api_client=self.api_client,
+            model=Config.CUSTOM_CHARACTER_MODEL,
+            temperature=Config.CUSTOM_CHARACTER_TEMPERATURE,
         )
         self.conversation_history: List[Dict[str, str]] = []
         self._ensure_character_greeting()
@@ -61,6 +67,21 @@ class ChatBot:
         self.memory_manager.upsert_structured_memory(extraction)
         self._refresh_history_snapshot()
         return ai_response
+
+    def create_custom_character(
+        self,
+        user_notes: str,
+        name_hint: str = "",
+        tags_hint: str = "",
+    ) -> CharacterProfile:
+        payload = self.custom_character_builder.build(
+            user_notes=user_notes,
+            name_hint=name_hint,
+            tags_hint=tags_hint,
+        )
+        profile = self.character_registry.create_custom_character(payload)
+        self.switch_character(profile.character_id)
+        return self.current_character
 
     def get_memory_summary(self):
         return self.memory_manager.get_memory_summary()
@@ -159,22 +180,6 @@ class ChatBot:
             return "balanced"
 
         lowered = text.lower()
-        explicit_brief_patterns = (
-            "简短",
-            "简单说",
-            "一两句",
-            "短一点",
-            "简单回答",
-            "长话短说",
-            "briefly",
-            "shortly",
-            "in one sentence",
-            "be concise",
-            "keep it short",
-        )
-        if any(pattern in lowered for pattern in explicit_brief_patterns):
-            return "concise"
-
         one_sentence_patterns = (
             "一句话",
             "只用一句话",
@@ -184,6 +189,21 @@ class ChatBot:
         )
         if any(pattern in lowered for pattern in one_sentence_patterns):
             return "one_sentence"
+
+        explicit_brief_patterns = (
+            "简短",
+            "简单说",
+            "一两句",
+            "短一点",
+            "简短回答",
+            "长话短说",
+            "briefly",
+            "shortly",
+            "be concise",
+            "keep it short",
+        )
+        if any(pattern in lowered for pattern in explicit_brief_patterns):
+            return "concise"
 
         explicit_detailed_patterns = (
             "详细",
@@ -216,26 +236,6 @@ class ChatBot:
             return "detailed"
         if sentence_length >= 60 or comma_count >= 3:
             return "detailed"
-
-        casual_short_patterns = (
-            "在吗",
-            "在干嘛",
-            "干嘛呢",
-            "你好",
-            "嗨",
-            "早安",
-            "晚安",
-            "hi",
-            "hello",
-            "hey",
-            "good morning",
-            "good night",
-        )
-        if any(pattern in lowered for pattern in casual_short_patterns):
-            return "balanced"
-
-        if sentence_length <= 12:
-            return "balanced"
 
         return "balanced"
 
